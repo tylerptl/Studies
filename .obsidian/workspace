@@ -1,0 +1,102 @@
+{
+  "main": {
+    "id": "912d5b15b2941fa3",
+    "type": "split",
+    "children": [
+      {
+        "id": "3610dc8bd6f294be",
+        "type": "leaf",
+        "state": {
+          "type": "markdown",
+          "state": {
+            "file": "HTB Academy/Active Directory.md",
+            "mode": "source",
+            "source": false
+          }
+        }
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "2d65d61725603128",
+    "type": "split",
+    "children": [
+      {
+        "id": "08886016b2c52680",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "743270702445c53f",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {}
+            }
+          },
+          {
+            "id": "517ccee97ccfd19c",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "7e34225e12f6496d",
+    "type": "split",
+    "children": [
+      {
+        "id": "8a732a36140e380e",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "ae26b048f2920aa3",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "HTB Academy/Active Directory.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "active": "3610dc8bd6f294be",
+  "lastOpenFiles": [
+    "HTB Academy/Active Directory.md",
+    "scratch.md",
+    "AttacktiveDirectory/Writeup.md",
+    "AttacktiveDirectory/NMAP Service Scan.md",
+    "DailyBugle/NMAP Open Ports.md",
+    "DailyBugle/joomblah.md",
+    "AttacktiveDirectory/NMAP Open ports.md",
+    "DailyBugle/Writeup.md",
+    "DailyBugle.md"
+  ]
+}
