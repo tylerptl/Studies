@@ -1,3 +1,5 @@
+
+
 # Context
 
 ## NT AUTHORITY \ SYSTEM
@@ -41,8 +43,59 @@
 	* Ex. Get all workstations `(objectCategory=computer)` or get all DCs `(&(objectCategory=Computer)(userAccountControl:1.2.840.113556.1.4.803:=8192))`
 	* [More queries from MS](https://social.technet.microsoft.com/wiki/contents/articles/5392.active-directory-ldap-syntax-filters.aspx)
 	* LDAPWiki for [Computers](https://ldapwiki.com/wiki/Active%20Directory%20Computer%20Related%20LDAP%20Query), [Users](https://ldapwiki.com/wiki/Active%20Directory%20User%20Related%20Searches), and [Groups](https://ldapwiki.com/wiki/Active%20Directory%20Group%20Related%20Searches)
+	* [Bit values to use with OID searches](https://ldapwiki.com/wiki/User-Account-Control%20Attribute%20Values) 
+		* `(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=2))` will search for all disabled user accounts - this has a bit value of 2 per the docs, and the UAC search has a string identifier of `LDAP_MATCHING_RULE_BIT_AND`
 
----
+
+### Active Directory Search Filters
+
+##### Filter Insatlled Software
+* This will display all installed software that is not from Microsoft
+
+````powershell-session
+get-ciminstance win32_product -Filter "NOT Vendor like '%Microsoft%'" | fl
+````
+
+* Search AD based on some set of parameters example. 
+```powershell
+Get-ADUser -Filter "name -eq 'sally jones'"
+Get-ADUser -Filter {name -eq 'sally jones'}
+Get-ADUser -Filter'name -eq "sally jones"'
+Get-ADUser -Filter * -Properties * | where servicePrincipalName -ne $null | select SamAccountName,MemberOf,ServicePrincipalName | fl
+
+Get-ADComputer  -Filter "DNSHostName -like 'SQL*'"
+Get-ADGroup -Filter "adminCount -eq 1" | select Name
+
+Get-ADUser -Properties * -LDAPFilter '(userAccountControl:1.2.840.113556.1.4.803:=524288)' | select Name,memberof, servicePrincipalName,TrustedForDelegation | fl
+
+# Accounts with no pw
+Get-AdUser -LDAPFilter '(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=32))(adminCount=1)' -Properties * | select name,memberof | fl
+
+```
+
+##### Attributes to filter on
+[User attr](http://www.kouti.com/tables/userattributes.htm)
+[Base attr](http://www.kouti.com/tables/baseattributes.htm)
+
+##### Recursive Search
+* Example: A user is a member of **Security Operations** which in turn is a member of **Domain Admins**. A normal search will not reveal that the user has **Domain Admins** rights, but `-RecursiveMatch` will show the derivative rights that the user inherits.
+	* `Get-ADGroup -Filter 'member -RecursiveMatch "CN=Harry Jones,OU=Network Ops,OU=IT,OU=Employees,DC=INLANEFREIGHT,DC=LOCAL"' | select name`
+	* Alternatively, use `LDAPFilter` like `Get-ADGroup -LDAPFilter '(member:1.2.840.113556.1.4.1941:=CN=Harry Jones,OU=Network Ops,OU=IT,OU=Employees,DC=INLANEFREIGHT,DC=LOCAL)' | select Name`
+
+##### Limiting Search Scope with "SearchBase"
+* `SearchBase` specifies an AD path to search under and permits searches in specific OUs.
+* The param accepts an OI distinguishedName like `OU=Employees,DC=INLANEFREIGHT,DC=LOCAL`
+* Use with `SearchScope n` to specify how deep the search should go inside the OU
+	* `OneLevel` (1) searches only in the container defined by `SearchBase`
+	* `SubTree` (2) searches in the specified container and all children - recursive throughout all grandchildren as well.
+
+##### Checking userAccessControl settings
+* The following search will spit out userAccountControl flag properties that can be found [here](https://ldapwiki.com/wiki/User-Account-Control%20Attribute%20Values)
+
+```powershell-session
+Get-ADUser -Filter {adminCount -gt 0} -Properties admincount,useraccountcontrol | select Name,useraccountcontrol
+```
+
 
 ### Rights and Privs in AD
 
@@ -73,7 +126,224 @@
 
 
 
+# Tools
+
+### PowerView
+
+* Used to enumerate AD
+* Import with `Import-Module ./Powerview.ps1`
+* Returns something like
+```Powershell
+PS C:\tools> Get-DomainUser * -AdminCount | select samaccountname,useraccountcontrol
+
+samaccountname                                                     useraccountcontrol
+--------------                                                     ------------------
+Administrator                                    NORMAL_ACCOUNT,DONT_EXPIRE_PASSWORD
+krbtgt                           ACCOUNTDISABLE, NORMAL_ACCOUNT,DONT_EXPIRE_PASSWORD
+daniel.carter                                                         NORMAL_ACCOUNT
+sqlqa                                                                 NORMAL_ACCOUNT
+svc-backup                                       NORMAL_ACCOUNT,DONT_EXPIRE_PASSWORD
+svc-secops                                       NORMAL_ACCOUNT,DONT_EXPIRE_PASSWORD
+cliff.moore                                      NORMAL_ACCOUNT,DONT_EXPIRE_PASSWORD
+svc-ata                                                               NORMAL_ACCOUNT
+svc-sccm                                                              NORMAL_ACCOUNT
+mrb3n                                                                 NORMAL_ACCOUNT
+sarah.lafferty                                                        NORMAL_ACCOUNT
+jenna.smith     PASSWD_NOTREQD, NORMAL_ACCOUNT,DONT_EXPIRE_PASSWORD,DONT_REQ_PREAUTH
+harry.jones                      PASSWD_NOTREQD, NORMAL_ACCOUNT,DONT_EXPIRE_PASSWORD
+trisha.duran                                                          NORMAL_ACCOUNT
+pixis                                                                 NORMAL_ACCOUNT
+Cry0l1t3                                                              NORMAL_ACCOUNT
+knightmare                                                            NORMAL_ACCOUNT```
+
+### Windapsearch.py
+* Enumerate users with `python3 windapsearch.py --dc-ip 10.129.1.207 -u "" -U`
+* Enumerate computer info with `python3 windapsearch.py --dc-ip 10.129.1.207 -u "" -C`
+* Get functional levels with `./windapsearch.py --dc-ip 10.129.44.46 -u "" --functionality`
+* You can combine custom filters from powershell like  `windapsearch --dc 10.129.44.46 -d inlanefreight -m custom --filter '(&(objectClass=person)(userAccountControl:1.2.840.113556.1.4.803:=262144))' --attrs dn`  - this will show users that require SMARTCARD_REQUIRED uac.
+* Ex. Find user accounts w/`userAccountControl` set to `ENCRYPTED_TEXT_PWD_ALLOWED`
+	```bash
+	windapsearch --dc 10.129.42.188 -d inlanefreight -m custom --filter '(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=128))' --attrs dn
+	
+dn: CN=wilford.stewart,CN=Users,DC=INLANEFREIGHT,DC=LOCAL
+	```
+
+	```bash
+[+] No username provided. Will try anonymous bind.
+[+] Using Domain Controller at: 10.129.44.46
+[+] Getting defaultNamingContext from Root DSE
+[+]     Found: DC=INLANEFREIGHT,DC=LOCAL
+[+] Functionality Levels:
+[+]      domainControllerFunctionality: 2016
+[+]      forestFunctionality: 2016
+[+]      domainFunctionality: 2016
+[+] Attempting bind
+[+]     ...success! Binded as: 
+[+]      None
+
+[*] Bye!
+
+	```
+
+
+##### Credentialed LDAP Enumeration with Windapsearch
 # Questions
 
 ##### LDAP Overview
 ![](Pasted%20image%2020220116213511.png)
+
+##### Active Directory Sarch Filters
+1. `Get-ADUser -Filter {DoesNotRequirePreAuth -eq 'True'}`
+2. `Get-ADComputer -Filter "DNSHostName -like 'WS*'"`
+3. `Get-ADUser -Filter * -Properties * | where servicePrincipalName -ne $null | select SamAccountName,MemberOf,ServicePrincipalName | fl`
+
+##### LDAP Search Filters
+```powershell
+Get-ADGroup -LDAPFilter '(member:1.2.840.113556.1.4.1941:=CN=Harry Jones,OU=Network Ops,OU=IT,OU=Employees,DC=INLANEFREIGHT,DC=LOCAL)' |select Name
+```
+
+
+```powershell-session
+Get-AdUser -Filter {(TrustedForDelegation -eq $True)} | select *
+```
+
+![First get all sub groups of employees, then get the cound of IT](Pasted%20image%2020220117183202.png)
+
+`Get-ADUser -SearchBase "OU=Pentest,OU=Employees,DC=INLANEFREIGHT,DC=LOCAL" -Filter *` => Clark.Thompson user
+
+##### LDAP Anon bind
+
+```bash
+windapsearch --dc 10.129.44.46 -m groups -s 'Protected Users' --full -m unconstrained
+
+dn: CN=Protected Users,CN=Users,DC=INLANEFREIGHT,DC=LOCAL
+objectClass: top
+objectClass: group
+cn: Protected Users
+description: Members of this group are afforded additional protections against authentication security threats. See http://go.microsoft.com/fwlink/?LinkId=298939 for more information.
+member: CN=sqldev,CN=Users,DC=INLANEFREIGHT,DC=LOCAL
+distinguishedName: CN=Protected Users,CN=Users,DC=INLANEFREIGHT,DC=LOCAL
+instanceType: 4
+whenCreated: 20201207164337.0Z
+whenChanged: 20201207191403.0Z
+uSNCreated: 12445
+uSNChanged: 12889
+name: Protected Users
+objectGUID: 8fwTFyP990G0Q9KPi6DUFw==
+objectSid: AQUAAAAAAAUVAAAAyFFXTuerf1LSWAaZDQIAAA==
+sAMAccountName: Protected Users
+sAMAccountType: 268435456
+groupType: -2147483646
+objectCategory: CN=Group,CN=Schema,CN=Configuration,DC=INLANEFREIGHT,DC=LOCAL
+isCriticalSystemObject: TRUE
+dSCorePropagationData: 20201207193350.0Z
+dSCorePropagationData: 20201207193325.0Z
+dSCorePropagationData: 20201207193300.0Z
+dSCorePropagationData: 20201207164337.0Z
+dSCorePropagationData: 16010714223233.0Z
+
+```
+
+```bash
+windapsearch --dc 10.129.44.46 -m users -s 'Kevin'                                   
+dn: CN=kevin.gregory,OU=Finance,OU=Employees,DC=INLANEFREIGHT,DC=LOCAL
+cn: kevin.gregory
+sAMAccountName: kevin.gregory
+
+```
+
+
+##### Credential enumeration
+```bash
+./ldapsearch-ad.py -l 10.129.42.188 -d inlanefreight -u james.cross -p Academy_Student! -t all                                                   3 ⨯ 1 ⚙
+
+### Server infos ###
+[+] Forest functionality level = Windows 2016
+[+] Domain functionality level = Windows 2016
+[+] Domain controller functionality level = Windows 2016
+[+] rootDomainNamingContext = DC=INLANEFREIGHT,DC=LOCAL
+[+] defaultNamingContext = DC=INLANEFREIGHT,DC=LOCAL
+[+] ldapServiceName = INLANEFREIGHT.LOCAL:dc01$@INLANEFREIGHT.LOCAL
+[+] naming_contexts = ['DC=INLANEFREIGHT,DC=LOCAL', 'CN=Configuration,DC=INLANEFREIGHT,DC=LOCAL', 'CN=Schema,CN=Configuration,DC=INLANEFREIGHT,DC=LOCAL', 'DC=DomainDnsZones,DC=INLANEFREIGHT,DC=LOCAL', 'DC=ForestDnsZones,DC=INLANEFREIGHT,DC=LOCAL']
+### Result of "admins" command ###
+All members of group "Domain Admins":
+[*]     mrb3n (DONT_EXPIRE_PASSWORD)
+[*]     Administrator (DONT_EXPIRE_PASSWORD)
+All members of group "Administrators":
+[*]     mrb3n (DONT_EXPIRE_PASSWORD)
+[*]     Administrator (DONT_EXPIRE_PASSWORD)
+All members of group "Enterprise Admins":
+[*]     Administrator (DONT_EXPIRE_PASSWORD)
+### Result of "pass-pols" command ###
+Default password policy:
+[+] |___Minimum password length = 7
+[+] |___Password complexity = Disabled
+[*] |___Lockout threshold = Disabled
+[+] No fine grained password policy found (high privileges are required).
+
+
+```
+
+```bash
+windapsearch --dc 10.129.42.188 -d inlanefreight -m custom --filter '(&(objectClass=person)(userAccountControl:1.2.840.113556.1.4.803:=262144))' --attrs dn
+
+dn: CN=sarah.lafferty,CN=Users,DC=INLANEFREIGHT,DC=LOCAL
+
+```
+
+```bash
+windapsearch --dc 10.129.42.188 -d inlanefreight -m custom --filter '(objectClass=domainDNS)' --attrs pwdHistoryLength                             147 ⨯
+
+dn: DC=INLANEFREIGHT,DC=LOCAL
+pwdHistoryLength: 5
+
+```
+
+```bash
+windapsearch --dc 10.129.42.188 -d inlanefreight -m custom --filter '(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=128))' --attrs dn
+
+dn: CN=wilford.stewart,CN=Users,DC=INLANEFREIGHT,DC=LOCAL
+```
+
+
+
+## Skill Assessment
+
+--- 
+
+1. Find the one user who has a useraccountcontrol attribute equivalent to 262656.
+```powershell
+Get-ADUser -Properties * -LDAPFilter '(userAccountControl:1.2.840.113556.1.4.803:=262656)' | select Name,memberof, servicePrincipalName,TrustedForDelegation | fl
+```
+
+2. Using built-in tools enumerate a user that has the PASSWD_NOTREQD UAC value set.
+```powershell
+Get-ADUser -Properties * -LDAPFilter '(userAccountControl:1.2.840.113556.1.4.803:=32)' | select Name,memberof, servicePrincipalName,TrustedForDelegation | fl
+```
+
+3. What group is the IT Support group nested into?
+![](Pasted%20image%2020220119223523.png)
+
+4.Who is a part of this group through nested group membership?
+ ```powershell
+ get-adgroup -LDAPFilter '(&(objectClass=group)(DistinguishedName=CN=IT Support,CN=Users,DC=INLANEFREIGHTENUM1,DC=LOCAL))' -Properties *
+ ```
+
+ 5. What is the name of the computer that starts with RD?
+ ![](Pasted%20image%2020220119230002.png)
+
+ 6. How many groups exist where the admincount attribute is set to 1?
+ 
+![](Pasted%20image%2020220119230058.png)
+
+7 . What user could be subjected to an ASREPRoasting attack and is NOT a protected user? (first.last)
+* Requires `DONT_REQUIRE_PREAUTH useraccountcontrol`
+
+`get-aduser -LDAPFilter '(userAccountControl:1.2.840.113556.1.4.803:=4194304)'`
+
+![](Pasted%20image%2020220119231944.png)
+
+8. What is the samaccountname of the one SPN set in the domain?
+ `Get-ADUser -Filter * -Properties * | where servicePrincipalName -ne $null | select SamAccountName,MemberOf,ServicePrincipalName | fl`
+
+![](Pasted%20image%2020220119232143.png)

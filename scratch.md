@@ -6,3 +6,6 @@ Get-ADObject -LDAPFilter'(&(objectCategory=person)(objectClass=user)(userAccount
 
 Get count of users in INLANEFREIGHT.LOCAL domain
 	`Get-ADObject -LDAPFilter '(&(objectCategory=person)(objectClass=user))' | measure-object -line`
+
+
+`Get-ADGroup -LDAPFilter '(&(objectClass=group)(name=*Admin*))' -Properties * | select name, members
